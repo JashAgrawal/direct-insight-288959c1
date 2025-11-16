@@ -6,7 +6,7 @@ import { AGENTS } from '@/lib/agents';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Loader2, XCircle, Sparkles, List } from 'lucide-react';
+import { Loader2, XCircle, Sparkles, List, ExternalLink } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
 
 export default function Landing() {
@@ -235,6 +235,43 @@ Just have a conversation to gather information.`;
             )}
           </div>
         )}
+
+        {/* Footer - Built by */}
+        <div className="border-t border-border pt-6 mt-8">
+          <div className="flex items-center justify-center gap-2 text-sm font-mono text-muted-foreground">
+            <span>Built by</span>
+            <a
+              href="https://jashagrawal.in/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline font-bold inline-flex items-center gap-1"
+            >
+              Jash Agrawal
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          <div className="flex items-center justify-center gap-4 mt-3">
+            <a
+              href="https://jashagrawal.in/github"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-mono text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+            >
+              GitHub
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <span className="text-muted-foreground">•</span>
+            <a
+              href="https://jashagrawal.in/linkedin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-mono text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+            >
+              LinkedIn
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
