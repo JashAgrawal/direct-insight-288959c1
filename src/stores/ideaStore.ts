@@ -1,0 +1,112 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export interface Idea {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: number;
+  assignedAgents: string[]; // agent IDs
+  validated: boolean;
+  validationData?: {
+    problem: string;
+    targetMarket: string;
+    businessModel: string;
+    competitors: string;
+    growthPlan: string;
+    legalChecks: string;
+    fundingNeeds: string;
+    prosAndCons: string;
+    brutalReview: string;
+  };
+  context: Array<{
+    agentId: string;
+    message: string;
+    timestamp: number;
+  }>;
+}
+
+interface IdeaState {
+  ideas: Idea[];
+  activeIdeaId: string | null;
+  createIdea: (idea: Omit<Idea, 'id' | 'createdAt' | 'validated' | 'context'>) => string;
+  updateIdea: (id: string, updates: Partial<Idea>) => void;
+  deleteIdea: (id: string) => void;
+  setActiveIdea: (id: string | null) => void;
+  addContextToIdea: (ideaId: string, agentId: string, message: string) => void;
+  getActiveIdea: () => Idea | null;
+}
+
+export const useIdeaStore = create<IdeaState>()(
+  persist(
+    (set, get) => ({
+      ideas: [],
+      activeIdeaId: null,
+      
+      createIdea: (idea) => {
+        const id = crypto.randomUUID();
+        const newIdea: Idea = {
+          ...idea,
+          id,
+          createdAt: Date.now(),
+          validated: false,
+          context: [],
+        };
+        
+        set((state) => ({
+          ideas: [...state.ideas, newIdea],
+          activeIdeaId: id,
+        }));
+        
+        return id;
+      },
+      
+      updateIdea: (id, updates) => {
+        set((state) => ({
+          ideas: state.ideas.map((idea) =>
+            idea.id === id ? { ...idea, ...updates } : idea
+          ),
+        }));
+      },
+      
+      deleteIdea: (id) => {
+        set((state) => ({
+          ideas: state.ideas.filter((idea) => idea.id !== id),
+          activeIdeaId: state.activeIdeaId === id ? null : state.activeIdeaId,
+        }));
+      },
+      
+      setActiveIdea: (id) => {
+        set({ activeIdeaId: id });
+      },
+      
+      addContextToIdea: (ideaId, agentId, message) => {
+        set((state) => ({
+          ideas: state.ideas.map((idea) =>
+            idea.id === ideaId
+              ? {
+                  ...idea,
+                  context: [
+                    ...idea.context,
+                    {
+                      agentId,
+                      message,
+                      timestamp: Date.now(),
+                    },
+                  ],
+                }
+              : idea
+          ),
+        }));
+      },
+      
+      getActiveIdea: () => {
+        const state = get();
+        return state.ideas.find((idea) => idea.id === state.activeIdeaId) || null;
+      },
+    }),
+    {
+      name: 'noshit-ideas-storage',
+    }
+  )
+);
