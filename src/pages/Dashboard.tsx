@@ -5,16 +5,16 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 
 export default function Dashboard() {
-  const { isApproved } = useAuthStore();
+  const { isUnlocked } = useAuthStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isApproved) {
+    if (!isUnlocked) {
       navigate('/');
     }
-  }, [isApproved, navigate]);
+  }, [isUnlocked, navigate]);
 
-  if (!isApproved) {
+  if (!isUnlocked) {
     return null;
   }
 

@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { useChatStore } from '@/stores/chatStore';
 import { AGENTS } from '@/lib/agents';
 import { sendToGemini } from '@/lib/gemini';
+import { HiveMindOrchestrator } from '@/lib/orchestrator';
+import { parseFunctionCalls, executeFunctionCall } from '@/lib/functionCalling';
 import { AgentBadge } from '@/components/AgentBadge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-
-interface BoardroomMessage {
-  id: string;
-  agentId: string;
-  content: string;
-  timestamp: number;
-}
+import { useChatStore } from '@/stores/chatStore';
+import { useIdeaStore } from '@/stores/ideaStore';
 
 interface Decision {
   question: string;
@@ -22,13 +18,16 @@ interface Decision {
 }
 
 export default function Boardroom() {
-  const { apiKey } = useChatStore();
+  const { getBoardroomMessages, addBoardroomMessage, clearBoardroomChat } = useChatStore();
+  const { activeIdeaId } = useIdeaStore();
   const [topic, setTopic] = useState('');
-  const [messages, setMessages] = useState<BoardroomMessage[]>([]);
   const [isDebating, setIsDebating] = useState(false);
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
   const [pendingDecision, setPendingDecision] = useState<Decision | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Get Boardroom messages for current idea
+  const messages = activeIdeaId ? getBoardroomMessages(activeIdeaId) : [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -37,15 +36,16 @@ export default function Boardroom() {
   const agentOrder = ['ceo', 'cto', 'cmo', 'cfo', 'pitch', 'legal', 'growth', 'ops'];
 
   const addMessage = (agentId: string, content: string) => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        agentId,
-        content,
-        timestamp: Date.now(),
-      },
-    ]);
+    if (!activeIdeaId) {
+      toast.error('No active idea selected');
+      return;
+    }
+
+    addBoardroomMessage(activeIdeaId, {
+      role: 'assistant',
+      content,
+      agentId,
+    });
   };
 
   const checkForDecision = (response: string): Decision | null => {
@@ -66,69 +66,140 @@ export default function Boardroom() {
   };
 
   const startDebate = async () => {
-    if (!apiKey || !topic.trim()) {
+    if (!topic.trim()) {
       toast.error('Enter a topic first');
       return;
     }
 
+    if (!activeIdeaId) {
+      toast.error('No active idea selected');
+      return;
+    }
+
     setIsDebating(true);
-    setMessages([]);
+    clearBoardroomChat(activeIdeaId);
     setPendingDecision(null);
 
     try {
-      let conversationHistory = `BOARDROOM TOPIC: ${topic}\n\n`;
-      
-      for (let i = 0; i < agentOrder.length; i++) {
-        const agentId = agentOrder[i];
+      const orchestrator = new HiveMindOrchestrator();
+      const boardroomHistory: string[] = [];
+
+      // Step 1: HiveMind decides which agents should participate
+      addMessage('hivemind', '🧠 HiveMind analyzing topic and selecting agents...');
+      setCurrentSpeaker('hivemind');
+
+      const delegationPrompt = `You are the HiveMind Delegator for a boardroom meeting.
+
+TOPIC: ${topic}
+
+Available agents:
+${Object.values(AGENTS)
+  .filter(a => a.id !== 'oracle' && a.id !== 'assistant')
+  .map(a => `- ${a.name} (${a.id}): ${a.role} - Expertise: ${a.expertise.join(', ')}`)
+  .join('\n')}
+
+Select 3-5 agents who should participate in this debate based on the topic.
+Return ONLY a JSON array of agent IDs, like: ["ceo", "cto", "cfo"]
+
+Be strategic. Choose agents whose expertise is most relevant to this topic.`;
+
+      const delegationResponse = await sendToGemini(delegationPrompt);
+      const jsonMatch = delegationResponse.match(/\[[\s\S]*?\]/);
+
+      let selectedAgents: string[];
+      if (jsonMatch) {
+        selectedAgents = JSON.parse(jsonMatch[0]);
+      } else {
+        // Fallback to default agents
+        selectedAgents = ['ceo', 'cto', 'cmo', 'cfo'];
+      }
+
+      addMessage('hivemind', `Selected agents for debate: ${selectedAgents.map(id => AGENTS[id]?.name || id).join(', ')}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Step 2: Sequential debate - each agent responds to the previous agent
+      for (let i = 0; i < selectedAgents.length; i++) {
+        const agentId = selectedAgents[i];
         const agent = AGENTS[agentId];
-        
+
+        if (!agent) continue;
+
         setCurrentSpeaker(agentId);
+
+        const previousAgent = i > 0 ? AGENTS[selectedAgents[i - 1]] : null;
+        const previousMessage = i > 0 ? boardroomHistory[boardroomHistory.length - 1] : null;
 
         const prompt = `${agent.systemPrompt}
 
 BOARDROOM MEETING TOPIC: ${topic}
 
-Previous discussion:
-${conversationHistory}
+${previousAgent && previousMessage ? `
+${previousAgent.name} just said:
+"${previousMessage}"
 
-Provide your perspective on this topic in 2-3 sentences. Be direct and focus on your area of expertise (${agent.role}).
+Respond to their point. Agree, disagree, build on it, or challenge it.
+` : `
+You're the first to speak. Set the tone for this discussion.
+`}
 
-If you believe a critical decision needs to be made, format your response as:
-DECISION REQUIRED: [Question]
-Option A: [First choice]
-Option B: [Second choice]`;
+Full conversation so far:
+${boardroomHistory.map((msg, idx) => `${AGENTS[selectedAgents[idx]]?.name}: ${msg}`).join('\n\n')}
 
-        const response = await sendToGemini(prompt, apiKey);
-        
+Provide your perspective in 2-3 sentences. Be direct, brutal, and focus on your expertise (${agent.role}).`;
+
+        const response = await sendToGemini(prompt);
+
         addMessage(agentId, response);
-        conversationHistory += `${agent.name}: ${response}\n\n`;
+        boardroomHistory.push(response);
 
-        const decision = checkForDecision(response);
-        if (decision) {
-          setPendingDecision(decision);
-          setIsDebating(false);
-          setCurrentSpeaker(null);
-          return;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
-      // Final CEO summary
-      setCurrentSpeaker('ceo');
-      const summaryPrompt = `${AGENTS.ceo.systemPrompt}
+      // Step 3: Assistant summarizes and creates tasks
+      setCurrentSpeaker('assistant');
+      const summaryPrompt = `${AGENTS.assistant.systemPrompt}
 
-You've just heard from all department heads about: ${topic}
+BOARDROOM MEETING TOPIC: ${topic}
 
-Conversation:
-${conversationHistory}
+Full debate:
+${boardroomHistory.map((msg, idx) => `${AGENTS[selectedAgents[idx]]?.name}: ${msg}`).join('\n\n')}
 
-Provide a final executive summary and decision in 3-4 sentences. Use "TRANSMISSION END" to close the meeting.`;
+Your job:
+1. Summarize the key points and decisions
+2. Extract 3-5 actionable tasks from this discussion
+3. Use FUNCTION CALLS to create tasks automatically
 
-      const summary = await sendToGemini(summaryPrompt, apiKey);
-      addMessage('ceo', summary);
+For each task, use:
+FUNCTION_CALL: create_task
+ARGUMENTS: {"title": "Task title", "description": "What needs to be done", "priority": "high", "assignedTo": "cto"}
+
+Be concise. Focus on execution. Create tasks using function calls.`;
+
+      const summary = await sendToGemini(summaryPrompt);
+      addMessage('assistant', summary);
+
+      // Parse and execute function calls from Assistant's response
+      const functionCalls = parseFunctionCalls(summary);
+      let tasksCreated = 0;
+
+      for (const call of functionCalls) {
+        const result = executeFunctionCall(call, activeIdeaId);
+        if (result.success) {
+          tasksCreated++;
+          console.log('Task created:', result.result);
+        } else {
+          console.error('Function call failed:', result.result);
+        }
+      }
+
+      if (tasksCreated > 0) {
+        toast.success(`Boardroom complete. ${tasksCreated} tasks created. Check Tasks tab.`);
+      } else {
+        toast.success('Boardroom meeting complete.');
+      }
 
     } catch (error) {
+      console.error('Boardroom error:', error);
       toast.error('Boardroom connection failed');
     } finally {
       setIsDebating(false);

@@ -3,10 +3,27 @@ import { Button } from '@/components/ui/button';
 import { sendToGemini } from '@/lib/gemini';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+
+interface ValidationResponse {
+  verdict: 'APPROVED' | 'REJECTED' | 'NEEDS_REFINEMENT';
+  score: number;
+  problem: string;
+  targetMarket: string;
+  businessModel: string;
+  competitors: string;
+  growthPlan: string;
+  legalChecks: string;
+  fundingNeeds: string;
+  prosAndCons: string;
+  brutalReview: string;
+}
 
 export function IdeaValidator() {
   const { getActiveIdea, updateIdea } = useIdeaStore();
   const [isValidating, setIsValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResponse | null>(null);
   const activeIdea = getActiveIdea();
   
   if (!activeIdea) {
@@ -23,58 +40,115 @@ export function IdeaValidator() {
     setIsValidating(true);
     
     try {
-      const validationPrompt = `Validate this startup idea comprehensively:
+      const validationPrompt = `Validate this startup idea comprehensively and return ONLY valid JSON:
 
-NAME: ${activeIdea.name}
-DESCRIPTION: ${activeIdea.description}
+IDEA NAME: ${activeIdea.name}
+IDEA DESCRIPTION: ${activeIdea.description}
 
-Provide a BRUTAL, honest validation covering:
-1. Problem breakdown (is it real?)
-2. Target market (who actually needs this?)
-3. Business model (how does money work?)
-4. Competitors (who else does this?)
-5. Growth plan (how to scale?)
-6. Legal checks (what could go wrong?)
-7. Funding needs (how much $?)
-8. Real pros/cons (no BS)
-9. Brutally honest review (roast if needed)
+Provide a BRUTAL, honest validation. Return your response as a JSON object with this EXACT structure (no markdown, no code blocks, just pure JSON):
 
-Be direct. No sugarcoating. Use Gen-Z language but stay professional.`;
+{
+  "verdict": "APPROVED" | "REJECTED" | "NEEDS_REFINEMENT",
+  "score": <number between 0-50>,
+  "problem": "<analysis of the problem being solved>",
+  "targetMarket": "<who needs this and market size>",
+  "businessModel": "<how money is made>",
+  "competitors": "<who else does this>",
+  "growthPlan": "<how to scale>",
+  "legalChecks": "<legal risks and considerations>",
+  "fundingNeeds": "<funding requirements>",
+  "prosAndCons": "<pros and cons>",
+  "brutalReview": "<brutally honest final review>"
+}
 
-      // This is a placeholder - in real implementation, you'd call multiple agents
-      // For now, using a single comprehensive prompt
-      const apiKey = localStorage.getItem('oracle-api-key');
-      if (!apiKey) {
-        toast.error('API key not found');
-        return;
+Verdict rules:
+- APPROVED: Score 35+ and strong fundamentals
+- NEEDS_REFINEMENT: Score 25-34
+- REJECTED: Score below 25
+
+Be direct. No sugarcoating. Return ONLY the JSON object, nothing else.`;
+
+      const response = await sendToGemini(validationPrompt);
+      
+      // Extract JSON from response (handle markdown code blocks if present)
+      let jsonStr = response.trim();
+      jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+      jsonStr = jsonStr.trim();
+      
+      try {
+        const validationData: ValidationResponse = JSON.parse(jsonStr);
+        
+        setValidationResult(validationData);
+        
+        updateIdea(activeIdea.id, {
+          validated: true,
+          validationData: {
+            problem: validationData.problem,
+            targetMarket: validationData.targetMarket,
+            businessModel: validationData.businessModel,
+            competitors: validationData.competitors,
+            growthPlan: validationData.growthPlan,
+            legalChecks: validationData.legalChecks,
+            fundingNeeds: validationData.fundingNeeds,
+            prosAndCons: validationData.prosAndCons,
+            brutalReview: validationData.brutalReview,
+          },
+        });
+        
+        toast.success('Validation complete!');
+      } catch (parseError) {
+        console.error('Failed to parse JSON:', parseError);
+        console.error('Response:', response);
+        toast.error('Failed to parse validation response. Check console for details.');
       }
-      
-      const response = await sendToGemini(validationPrompt, apiKey);
-      
-      // Parse response (simplified - would be more sophisticated in production)
-      updateIdea(activeIdea.id, {
-        validated: true,
-        validationData: {
-          problem: 'Validation complete',
-          targetMarket: response,
-          businessModel: '',
-          competitors: '',
-          growthPlan: '',
-          legalChecks: '',
-          fundingNeeds: '',
-          prosAndCons: '',
-          brutalReview: response,
-        },
-      });
-      
-      toast.success('Validation complete!');
     } catch (error) {
       toast.error('Validation failed');
+      console.error(error);
     } finally {
       setIsValidating(false);
     }
   };
   
+  const displayData = validationResult || (activeIdea.validated && activeIdea.validationData ? {
+    verdict: 'APPROVED' as const,
+    score: 0,
+    problem: activeIdea.validationData.problem,
+    targetMarket: activeIdea.validationData.targetMarket,
+    businessModel: activeIdea.validationData.businessModel,
+    competitors: activeIdea.validationData.competitors,
+    growthPlan: activeIdea.validationData.growthPlan,
+    legalChecks: activeIdea.validationData.legalChecks,
+    fundingNeeds: activeIdea.validationData.fundingNeeds,
+    prosAndCons: activeIdea.validationData.prosAndCons,
+    brutalReview: activeIdea.validationData.brutalReview,
+  } : null);
+
+  const getVerdictColor = (verdict: string) => {
+    switch (verdict) {
+      case 'APPROVED':
+        return 'border-green-500 bg-green-500/10 text-green-500';
+      case 'REJECTED':
+        return 'border-red-500 bg-red-500/10 text-red-500';
+      case 'NEEDS_REFINEMENT':
+        return 'border-yellow-500 bg-yellow-500/10 text-yellow-500';
+      default:
+        return 'border-border bg-background text-foreground';
+    }
+  };
+
+  const getVerdictIcon = (verdict: string) => {
+    switch (verdict) {
+      case 'APPROVED':
+        return <CheckCircle2 className="h-5 w-5" />;
+      case 'REJECTED':
+        return <XCircle className="h-5 w-5" />;
+      case 'NEEDS_REFINEMENT':
+        return <AlertCircle className="h-5 w-5" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="border-b border-border pb-4">
@@ -84,7 +158,7 @@ Be direct. No sugarcoating. Use Gen-Z language but stay professional.`;
         </p>
       </div>
       
-      {!activeIdea.validated ? (
+      {!displayData ? (
         <div className="text-center py-12 space-y-4">
           <p className="font-mono text-sm text-muted-foreground">
             Ready to get brutal feedback on this idea?
@@ -95,45 +169,62 @@ Be direct. No sugarcoating. Use Gen-Z language but stay professional.`;
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Verdict Highlight at Top */}
+          <Card className={`border-2 ${getVerdictColor(displayData.verdict)}`}>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {getVerdictIcon(displayData.verdict)}
+                  <span className="text-2xl font-mono uppercase">VERDICT: {displayData.verdict}</span>
+                </div>
+                {validationResult && (
+                  <div className="text-sm font-mono opacity-80">
+                    Score: {validationResult.score}/50
+                  </div>
+                )}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
           <div className="grid gap-4">
             <ValidationSection
               title="Problem Breakdown"
-              content={activeIdea.validationData?.problem || 'N/A'}
+              content={displayData.problem || 'N/A'}
             />
             <ValidationSection
               title="Target Market"
-              content={activeIdea.validationData?.targetMarket || 'N/A'}
+              content={displayData.targetMarket || 'N/A'}
             />
             <ValidationSection
               title="Business Model"
-              content={activeIdea.validationData?.businessModel || 'N/A'}
+              content={displayData.businessModel || 'N/A'}
             />
             <ValidationSection
               title="Competitors"
-              content={activeIdea.validationData?.competitors || 'N/A'}
+              content={displayData.competitors || 'N/A'}
             />
             <ValidationSection
               title="Growth Plan"
-              content={activeIdea.validationData?.growthPlan || 'N/A'}
+              content={displayData.growthPlan || 'N/A'}
             />
             <ValidationSection
               title="Legal Checks"
-              content={activeIdea.validationData?.legalChecks || 'N/A'}
+              content={displayData.legalChecks || 'N/A'}
             />
             <ValidationSection
               title="Funding Needs"
-              content={activeIdea.validationData?.fundingNeeds || 'N/A'}
+              content={displayData.fundingNeeds || 'N/A'}
             />
             <ValidationSection
               title="Pros & Cons"
-              content={activeIdea.validationData?.prosAndCons || 'N/A'}
+              content={displayData.prosAndCons || 'N/A'}
             />
             <div className="border-2 border-accent p-4 bg-accent/5">
               <h3 className="text-xs font-mono font-bold text-accent uppercase tracking-wider mb-2">
                 🔥 BRUTAL REVIEW
               </h3>
               <p className="font-mono text-sm text-foreground whitespace-pre-wrap">
-                {activeIdea.validationData?.brutalReview || 'N/A'}
+                {displayData.brutalReview || 'N/A'}
               </p>
             </div>
           </div>

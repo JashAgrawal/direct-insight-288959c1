@@ -11,7 +11,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Grid3x3, Users, Lightbulb, BarChart3, LogOut } from 'lucide-react';
+import { Grid3x3, Users, Lightbulb, BarChart3, LogOut, FolderOpen, CheckSquare } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,8 @@ export function AppSidebar() {
   const mainRoutes = [
     { title: 'HiveMind Chat', url: '/dashboard', icon: Grid3x3 },
     { title: 'Boardroom', url: '/dashboard/boardroom', icon: Users },
+    { title: 'Tasks', url: '/dashboard/tasks', icon: CheckSquare },
+    { title: 'All Ideas', url: '/analyze-ideas', icon: FolderOpen, external: true },
     { title: 'Idea Stats', url: '/dashboard/stats', icon: BarChart3 },
     { title: 'Validator', url: '/dashboard/validator', icon: Lightbulb },
   ];

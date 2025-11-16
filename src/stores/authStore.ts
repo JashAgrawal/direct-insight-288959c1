@@ -1,24 +1,30 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type OracleVerdict = 'TRASH' | 'MID' | 'VIABLE' | 'FIRE';
+
 interface AuthState {
-  isApproved: boolean;
+  verdict: OracleVerdict | null;
+  isUnlocked: boolean; // true for VIABLE/FIRE, false for TRASH/MID
   submittedIdea: string | null;
   oracleResponse: string | null;
-  setApproved: (idea: string, response: string) => void;
+  setVerdict: (verdict: OracleVerdict, idea: string, response: string) => void;
   reset: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      isApproved: false,
+      verdict: null,
+      isUnlocked: false,
       submittedIdea: null,
       oracleResponse: null,
       
-      setApproved: (idea, response) => {
+      setVerdict: (verdict, idea, response) => {
+        const isUnlocked = verdict === 'VIABLE' || verdict === 'FIRE';
         set({ 
-          isApproved: true, 
+          verdict,
+          isUnlocked,
           submittedIdea: idea,
           oracleResponse: response 
         });
@@ -26,7 +32,8 @@ export const useAuthStore = create<AuthState>()(
       
       reset: () => {
         set({ 
-          isApproved: false, 
+          verdict: null,
+          isUnlocked: false,
           submittedIdea: null,
           oracleResponse: null 
         });

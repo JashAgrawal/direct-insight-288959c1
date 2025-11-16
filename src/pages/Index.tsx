@@ -7,15 +7,13 @@ import { ChatMessage } from '@/components/ChatMessage';
 import { ChatInput } from '@/components/ChatInput';
 import { IdeaWorkspace } from '@/components/IdeaWorkspace';
 import { IdeaValidator } from '@/components/IdeaValidator';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Lightbulb, Users, Grid3x3 } from 'lucide-react';
 
 export default function Index() {
-  const { messages, apiKey, isLoading, addMessage, setApiKey, setLoading, clearChat } = useChatStore();
+  const { messages, isLoading, addMessage, setLoading, clearChat } = useChatStore();
   const { getActiveIdea, addContextToIdea } = useIdeaStore();
-  const [tempKey, setTempKey] = useState('');
   const [view, setView] = useState<'chat' | 'ideas' | 'validator'>('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -24,11 +22,6 @@ export default function Index() {
   }, [messages]);
 
   const handleSend = async (content: string) => {
-    if (!apiKey) {
-      toast.error('Set API key first');
-      return;
-    }
-
     const activeIdea = getActiveIdea();
     
     // Add user message
@@ -65,7 +58,6 @@ USER QUESTION: ${content}`;
       // Get response from selected agent
       const response = await sendToGemini(
         contextualPrompt,
-        apiKey,
         routing.agent.systemPrompt
       );
       
@@ -74,7 +66,7 @@ USER QUESTION: ${content}`;
         role: 'assistant', 
         content: response,
         agentId: routing.agent.id,
-        ideaId: activeIdea?.id
+        ideaId: activeIdea?.id 
       });
       
       // Add to idea context if active
@@ -83,59 +75,11 @@ USER QUESTION: ${content}`;
       }
       
     } catch (error) {
-      toast.error('Agent offline. Check API key.');
+      toast.error('Agent offline. Check API configuration.');
     } finally {
       setLoading(false);
     }
   };
-
-  if (!apiKey) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md w-full space-y-6 border border-border p-8">
-          <div>
-            <h1 className="text-2xl font-mono font-bold text-primary mb-2">NO SHIT</h1>
-            <p className="text-sm font-mono text-muted-foreground">
-              Brutally honest Oracle for founders.
-            </p>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-mono text-muted-foreground block mb-2">
-                GEMINI API KEY
-              </label>
-              <Input
-                type="password"
-                value={tempKey}
-                onChange={(e) => setTempKey(e.target.value)}
-                placeholder="Enter API key..."
-                className="font-mono text-sm"
-              />
-            </div>
-            <Button
-              onClick={() => {
-                if (tempKey.trim()) {
-                  setApiKey(tempKey.trim());
-                }
-              }}
-              disabled={!tempKey.trim()}
-              className="w-full"
-            >
-              INITIALIZE
-            </Button>
-            <a
-              href="https://makersuite.google.com/app/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-mono text-accent hover:underline block text-center"
-            >
-              Get API key →
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -4,12 +4,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
+import OracleChat from "./pages/OracleChat";
 import Dashboard from "./pages/Dashboard";
 import DashboardHome from "./pages/DashboardHome";
 import AgentChat from "./pages/AgentChat";
 import Boardroom from "./pages/Boardroom";
+import Tasks from "./pages/Tasks";
 import IdeaStats from "./pages/IdeaStats";
 import ValidatorPage from "./pages/ValidatorPage";
+import AnalyzeIdeas from "./pages/AnalyzeIdeas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,10 +25,13 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/oracle-chat" element={<OracleChat />} />
+          <Route path="/analyze-ideas" element={<AnalyzeIdeas />} />
           <Route path="/dashboard" element={<Dashboard />}>
             <Route index element={<DashboardHome />} />
             <Route path="agent/:agentId" element={<AgentChat />} />
             <Route path="boardroom" element={<Boardroom />} />
+            <Route path="tasks" element={<Tasks />} />
             <Route path="stats" element={<IdeaStats />} />
             <Route path="validator" element={<ValidatorPage />} />
           </Route>

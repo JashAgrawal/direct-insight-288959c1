@@ -1,6 +1,29 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type OracleVerdict = 'TRASH' | 'MID' | 'VIABLE' | 'FIRE' | null;
+
+export interface DashboardData {
+  scores: {
+    problemClarity: number;
+    marketSize: number;
+    uniqueness: number;
+    businessModel: number;
+    executionFeasibility: number;
+    overall: number;
+  };
+  pros: string[];
+  cons: string[];
+  flags: {
+    red: string[];
+    yellow: string[];
+    green: string[];
+  };
+  summary: string;
+  conclusion: string;
+  recommendedPath: string;
+}
+
 export interface Idea {
   id: string;
   name: string;
@@ -8,6 +31,7 @@ export interface Idea {
   createdAt: number;
   assignedAgents: string[]; // agent IDs
   validated: boolean;
+  verdict: OracleVerdict; // Oracle verdict for this idea
   validationData?: {
     problem: string;
     targetMarket: string;
@@ -19,6 +43,7 @@ export interface Idea {
     prosAndCons: string;
     brutalReview: string;
   };
+  dashboardData?: DashboardData; // Per-idea dashboard data
   context: Array<{
     agentId: string;
     message: string;
@@ -50,6 +75,7 @@ export const useIdeaStore = create<IdeaState>()(
           id,
           createdAt: Date.now(),
           validated: false,
+          verdict: null,
           context: [],
         };
         
