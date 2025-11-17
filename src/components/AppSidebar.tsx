@@ -46,7 +46,9 @@ export function AppSidebar() {
     <Sidebar className={collapsed ? 'w-14' : 'w-64'} collapsible="icon">
       <SidebarContent>
         {/* Header */}
-        <div className="p-4 border-b border-border">
+        <div onClick={()=>{
+          navigate("/")
+        }} className="p-4 border-b border-border cursor-pointer">
           <h2 className={`font-mono font-bold text-primary ${collapsed ? 'text-xs' : 'text-lg'}`}>
             {collapsed ? 'NS' : 'NO SHIT'}
           </h2>
