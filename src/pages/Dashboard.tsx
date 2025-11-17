@@ -1,20 +1,24 @@
 import { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';
+import { useIdeaStore } from '@/stores/ideaStore';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 
 export default function Dashboard() {
-  const { isUnlocked } = useAuthStore();
+  const { getActiveIdea } = useIdeaStore();
   const navigate = useNavigate();
+  const activeIdea = getActiveIdea();
+
+  // Check if the active idea has VIABLE or FIRE verdict
+  const isIdeaUnlocked = activeIdea && (activeIdea.verdict === 'VIABLE' || activeIdea.verdict === 'FIRE');
 
   useEffect(() => {
-    if (!isUnlocked) {
+    if (!isIdeaUnlocked) {
       navigate('/');
     }
-  }, [isUnlocked, navigate]);
+  }, [isIdeaUnlocked, navigate]);
 
-  if (!isUnlocked) {
+  if (!isIdeaUnlocked) {
     return null;
   }
 
